@@ -1,6 +1,5 @@
 // api/transcribe.js
-// Vercel serverless function — proxies audio to OpenAI Whisper
-// Your API key stays here, never exposed to the browser
+// Vercel serverless function — proxies audio to Groq Whisper (free)
 
 import formidable from 'formidable';
 import fs from 'fs';
@@ -8,11 +7,10 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 
 export const config = {
-  api: { bodyParser: false }, // required for file uploads
+  api: { bodyParser: false },
 };
 
 export default async function handler(req, res) {
-  // Allow CORS from your GitHub Pages site
   res.setHeader('Access-Control-Allow-Origin', 'https://conscisapien.github.io');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -21,7 +19,6 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    // Parse the incoming audio file
     const form = formidable({ keepExtensions: true });
     const [fields, files] = await form.parse(req);
 
@@ -30,19 +27,19 @@ export default async function handler(req, res) {
 
     if (!audioFile) return res.status(400).json({ error: 'No audio file received' });
 
-    // Forward to OpenAI Whisper
     const fd = new FormData();
     fd.append('file', fs.createReadStream(audioFile.filepath), {
       filename: 'audio.webm',
       contentType: 'audio/webm',
     });
-    fd.append('model', 'whisper-1');
+    fd.append('model', 'whisper-large-v3');
     fd.append('language', language);
+    fd.append('response_format', 'json');
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, // ← stored securely in Vercel env
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
         ...fd.getHeaders(),
       },
       body: fd,
@@ -50,7 +47,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const err = await response.text();
-      return res.status(500).json({ error: 'Whisper API error', detail: err });
+      return res.status(500).json({ error: 'Groq API error', detail: err });
     }
 
     const data = await response.json();
